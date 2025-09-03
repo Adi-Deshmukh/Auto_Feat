@@ -1,0 +1,57 @@
+################################
+# OS-specific files
+################################
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+################################
+# IDE and Editor Configurations
+################################
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+################################
+# Backend (Python)
+################################
+backend/__pycache__/
+backend/*.pyc
+backend/*.pyo
+backend/*.pyd
+backend/venv/
+backend/.venv/
+
+# Python Build & Packaging
+backend/build/
+backend/dist/
+backend/*.egg-info/
+backend/*.spec
+
+################################
+# Frontend (Node.js) - For future use
+################################
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+################################
+# Secrets and Environment Files
+################################
+# Ignore all .env files in any directory
+**/.env
+**/.env.*
+# But DO NOT ignore the example file in the backend
+!backend/.env.example
+
+################################
+# Logs and Databases
+################################
+*.log
+*.sqlite
+*.sqlite3
