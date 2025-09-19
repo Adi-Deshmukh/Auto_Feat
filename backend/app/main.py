@@ -1,20 +1,18 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
-import app.models.database_models  # Import models to create tables
+from app.api.routes import projects
+from app.core.dependencies import get_db    
 
 # Create tables
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(
+    title="AutoFeat",
+    description="An intelligent feature engineering platform using genetic programming.",
+    version="0.1.0",
+)
 
-# Dependency
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 @app.get("/")
 def read_root():
@@ -23,3 +21,7 @@ def read_root():
 @app.get("/db-test")
 def test_db_connection(db: Session = Depends(get_db)):
     return {"message": "Database connection successful"}
+
+
+# Api endpoints
+app.include_router(projects.router)
