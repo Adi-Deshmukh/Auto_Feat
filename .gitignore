@@ -55,3 +55,9 @@ yarn-error.log*
 *.log
 *.sqlite
 *.sqlite3
+
+
+# Virtual Environment
+venv/
+.venv/
+afeat/
