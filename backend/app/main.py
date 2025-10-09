@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
-from app.api.routes import projects
+from app.api.routes import projects, upload
 from app.core.dependencies import get_db    
 
 # Create tables
@@ -25,3 +25,5 @@ def test_db_connection(db: Session = Depends(get_db)):
 
 # Api endpoints
 app.include_router(projects.router)
+app.include_router(upload.router)
+

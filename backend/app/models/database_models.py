@@ -28,3 +28,11 @@ class Project(Base):
     created_at = Column(DateTime, server_default=func.now())
     datasets = relationship("Dataset", back_populates="project")
     
+class FileUpload(Base):
+    __tablename__ = "file_uploads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    filename = Column(String(255), nullable=False)
+    filepath = Column(String, nullable=False)
+    content_type = Column(String(100))
+    upload_time = Column(DateTime, server_default=func.now())

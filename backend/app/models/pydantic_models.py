@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
@@ -12,5 +12,12 @@ class Project(ProjectCreate):
     id: UUID
     created_at: datetime
 
-    class Config:
-        orm_mode = True
+    model_config = ConfigDict(from_attributes=True)
+        
+class FileUploadResponse(BaseModel):
+    id: UUID
+    filename: str
+    content_type: str
+    upload_time: datetime
+
+    model_config = ConfigDict(from_attributes=True)
