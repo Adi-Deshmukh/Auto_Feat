@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
     API_KEY: str
     UPLOAD_DIRECTORY: str = "uploads"  
+    REPORT_DIRECTORY: str = "reports"
     
     @field_validator("DATABASE_URL", mode="before")
     def assemble_db_url(cls, v, values):

@@ -24,11 +24,25 @@ backend/*.pyd
 backend/venv/
 backend/.venv/
 
+# Python cache files (all directories)
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+
 # Python Build & Packaging
 backend/build/
 backend/dist/
 backend/*.egg-info/
 backend/*.spec
+
+# Uploads directory (user uploaded files)
+backend/uploads/
+uploads/
+
+# Test files
+backend/testing.py
+backend/output.html
 
 ################################
 # Frontend (Node.js) - For future use

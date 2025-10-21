@@ -13,11 +13,14 @@ class Project(ProjectCreate):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
-        
-class FileUploadResponse(BaseModel):
+
+class DatasetResponse(BaseModel):
     id: UUID
+    project_id: UUID
+    name: str
     filename: str
     content_type: str
+    row_count: Optional[int] = None
     upload_time: datetime
 
     model_config = ConfigDict(from_attributes=True)

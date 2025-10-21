@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 import os
 import shutil
+import pandas as pd
 from app.core.database import SessionLocal
 from app.core.dependencies import get_db
 from app.core.config import settings
@@ -11,32 +12,45 @@ import uuid
 router = APIRouter()
 UPLOAD_DIRECTORY = settings.UPLOAD_DIRECTORY
 
-@router.post("/upload/", response_model=pydantic_models.FileUploadResponse) #file format for the output
-def upload_file(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    if not os.path.exists(UPLOAD_DIRECTORY): # creates a directory to save you files or saves in the existing directory
+@router.post("/projects/{project_id}/datasets/", response_model=pydantic_models.DatasetResponse)
+def upload_dataset(project_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    # Verify the project exists
+    project = db.query(database_models.Project).filter(database_models.Project.id == project_id).first()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    # Create upload directory if it doesn't exist
+    if not os.path.exists(UPLOAD_DIRECTORY):
         os.makedirs(UPLOAD_DIRECTORY)
 
-    file_id = str(uuid.uuid4()) # Generating a unique ID (UUID) for the file.
-    file_location = os.path.join(UPLOAD_DIRECTORY, file_id + "_" + file.filename) #Creating a new, unique filename by prepending the ID to the original filename
+    # Generate unique file ID and save file to disk
+    file_id = str(uuid.uuid4())
+    file_location = os.path.join(UPLOAD_DIRECTORY, file_id + "_" + file.filename)
 
-    with open(file_location, "wb") as buffer: # Save the File
+    with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    # Create a DB record and fileupload for storing the metadata
+    # Calculate row count by reading the file
+    row_count = None
+    try:
+        df = pd.read_csv(file_location)
+        row_count = len(df)
+    except Exception as e:
+        # If we can't read the file, we'll just set row_count to None
+        pass
 
-    db_file = database_models.FileUpload(
+    # Create Dataset record in database
+    db_dataset = database_models.Dataset(
         id=file_id,
+        project_id=project_id,
+        name=file.filename,  # You can modify this to allow custom names
         filename=file.filename,
         filepath=file_location,
-        content_type=file.content_type
+        content_type=file.content_type,
+        row_count=row_count
     )
-    db.add(db_file)
+    db.add(db_dataset)
     db.commit()
-    db.refresh(db_file)
+    db.refresh(db_dataset)
 
-    return pydantic_models.FileUploadResponse(
-        id=db_file.id,
-        filename=db_file.filename,
-        content_type=db_file.content_type,
-        upload_time=db_file.upload_time
-    )
+    return db_dataset

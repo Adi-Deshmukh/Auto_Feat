@@ -1,7 +1,7 @@
 import uuid
-from sqlalchemy import Column, String, DateTime,ForeignKey,func
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.core.database import Base
 import pandas as pd
 
@@ -12,8 +12,12 @@ class Dataset(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"), nullable=False)
     name = Column(String(255), nullable=False)
-    row_count = Column(String)
-    path = Column(String, nullable=False)
+    filename = Column(String(255), nullable=False)
+    filepath = Column(String, nullable=False)
+    content_type = Column(String(100))
+    row_count = Column(Integer)
+    upload_time = Column(DateTime, server_default=func.now())
+    profiling_report = Column(JSONB)  # Store profiling report as JSON
     project = relationship("Project", back_populates="datasets")
 
 
@@ -28,11 +32,3 @@ class Project(Base):
     created_at = Column(DateTime, server_default=func.now())
     datasets = relationship("Dataset", back_populates="project")
     
-class FileUpload(Base):
-    __tablename__ = "file_uploads"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    filename = Column(String(255), nullable=False)
-    filepath = Column(String, nullable=False)
-    content_type = Column(String(100))
-    upload_time = Column(DateTime, server_default=func.now())
