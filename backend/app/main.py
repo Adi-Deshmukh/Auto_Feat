@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
-from app.api.routes import projects, upload, profiling
+from app.api.routes import projects, upload, profiling, features
 from app.core.dependencies import get_db    
 
 # Create tables
@@ -27,4 +27,4 @@ def test_db_connection(db: Session = Depends(get_db)):
 app.include_router(projects.router, tags=["projects"])
 app.include_router(upload.router, tags=["datasets"])
 app.include_router(profiling.router, tags=["profiling"])
-
+app.include_router(features.router, tags=["features"])

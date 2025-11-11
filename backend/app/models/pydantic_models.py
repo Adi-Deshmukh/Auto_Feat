@@ -24,3 +24,13 @@ class DatasetResponse(BaseModel):
     upload_time: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class FeatureGenerationConfig(BaseModel):
+    target_column: str
+    '''   
+    enabled: bool = True
+    methods: list[str] = ["add", "sub", "mul", "div", "sqrt", "log"]
+    max_features: int = 10
+    random_state: int = 0 '''
+
