@@ -1,7 +1,8 @@
 from pydantic import BaseModel, ConfigDict
-from typing import Optional
+from typing import Optional, Literal, List
 from uuid import UUID
 from datetime import datetime
+from typing import List
 
 class ProjectCreate(BaseModel):
     name: str
@@ -28,9 +29,8 @@ class DatasetResponse(BaseModel):
 
 class FeatureGenerationConfig(BaseModel):
     target_column: str
-    '''   
-    enabled: bool = True
-    methods: list[str] = ["add", "sub", "mul", "div", "sqrt", "log"]
-    max_features: int = 10
-    random_state: int = 0 '''
+    problem_type: Literal["regression", "classification"]
+    drop_columns: Optional[List[str]] = None
+
+    model_config = ConfigDict(from_attributes=True)
 

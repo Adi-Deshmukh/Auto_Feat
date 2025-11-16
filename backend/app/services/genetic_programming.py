@@ -1,46 +1,233 @@
+"""
+Genetic Programming Service for Automated Feature Engineering
+
+This module leverages gplearn's SymbolicRegressor to evolve mathematical
+expressions that serve as engineered features. It integrates seamlessly with
+the Preprocessor for complete data preparation.
+
+Workflow:
+    1. Validate input data
+    2. Preprocess using Preprocessor (datetime decomposition, encoding, scaling)
+    3. Split into train/test sets
+    4. Run genetic programming to evolve features
+    5. Extract and return best programs
+
+Author: Aditya Deshmukh
+"""
+
+from typing import Literal, List, Dict, Any, Tuple
 import pandas as pd
-from gplearn.genetic import SymbolicRegressor
+from gplearn.genetic import SymbolicRegressor, SymbolicClassifier, SymbolicClassifier
 from sklearn.model_selection import train_test_split
-import numpy as np
 
-class GeneticProgrammingService:
-    def __init__(self, target_column: str):
-        self.target_column = target_column
-        self.regressor = None
+from app.services.preprocessor import Preprocessor
+
+
+class GeneticProgramming:
+    """
+    Genetic Programming service for automated feature generation.
     
-    def run(self, dataframe: pd.DataFrame) -> list:
-        try:
-            if self.target_column not in dataframe.columns:
-                raise ValueError(f"Target column '{self.target_column}' not found in dataset")
+    This class uses gplearn's SymbolicRegressor to evolve mathematical
+    expressions through genetic programming. The Preprocessor handles all
+    data cleaning, transformation, and encoding automatically.
+    
+    Attributes:
+        target_column (str): Name of the target variable
+        problem_type (Literal["classification", "regression"]): Type of ML problem
+        preprocessor (Preprocessor): Data preprocessing pipeline
+        regressor (SymbolicRegressor): Fitted GP model (None until trained)
+    """
+    
+    def __init__(
+        self, 
+        target_column: str, 
+        problem_type: Literal["classification", "regression"],
+        population_size: int = 1000,
+        generations: int = 20,
+        random_state: int = 42,
+        drop_columns: List[str] | None = None
+    ):
+        """
+        Initialize the Genetic Programming service.
+        
+        Args:
+            target_column: Name of the target column in the dataset
+            problem_type: Either "classification" or "regression"
+            population_size: Number of programs in each generation (default: 1000)
+            generations: Number of generations to evolve (default: 20)
+            random_state: Random seed for reproducibility (default: 42)
             
-            X = dataframe.drop(columns=[self.target_column])
-            y = dataframe[self.target_column]
+        Raises:
+            ValueError: If problem_type is not "classification" or "regression"
+        """
+        if problem_type not in {"classification", "regression"}:
+            raise ValueError("problem_type must be 'classification' or 'regression'")
             
-            if y.dtype == 'object' or y.dtype.name == 'category':       
-                mapping = {'Y': 1, 'N': 0}
-                # Apply the translation.
-                y = y.map(mapping)
+        self.target_column = target_column
+        self.problem_type = problem_type
+        self.population_size = population_size
+        self.generations = generations
+        self.random_state = random_state
+        self.drop_columns = drop_columns
+        
+        # Initialize preprocessor
+        self.preprocessor = Preprocessor(
+            problem_type=problem_type, 
+            target_column=target_column
+        )
+        
+        # Will be set after training
+        self.regressor = None
+        self._feature_names = None
+    
+    def run(self, dataframe: pd.DataFrame) -> List[Dict[str, Any]]:
+        """
+        Execute the complete genetic programming workflow.
+        
+        This method:
+        1. Validates the input dataframe
+        2. Preprocesses data using the Preprocessor
+        3. Splits data into train/test sets
+        4. Trains the SymbolicRegressor
+        5. Extracts evolved features
+        
+        Args:
+            dataframe: Input DataFrame containing features and target
             
-# Handle non-numeric columns
+        Returns:
+            List of dictionaries containing evolved feature information:
+            [
+                {
+                    "feature_id": int,
+                    "expression": str,
+                    "fitness": float,
+                    "description": str
+                },
+                ...
+            ]
             
-            numeric_columns = X.select_dtypes(include=[np.number]).columns.tolist()
-            if len(numeric_columns) == 0:
-                raise ValueError("No numeric columns found for feature generation")
-            
-            X = X[numeric_columns]
-            
-            X = X.fillna(0)
-            y = y.fillna(0)
+        Raises:
+            ValueError: If target column not found or preprocessing fails
+        """
+        # Drop columns if specified
+        if self.drop_columns:
+            # Ensure columns exist before dropping
+            columns_to_drop = [col for col in self.drop_columns if col in dataframe.columns]
+            dataframe = dataframe.drop(columns=columns_to_drop)
 
+        # Validate dataframe before preprocessing
+        if self.target_column not in dataframe.columns:
+            raise ValueError(f"Target column '{self.target_column}' not in dataframe. Available columns: {list(dataframe.columns)}")
+        
+        # Step 1: Validate input
+        self._validate_input(dataframe)
+        
+        # Step 2: Preprocess data
+        # Preprocessor handles:
+        # - Datetime decomposition
+        # - Missing value imputation
+        # - Scaling (numeric features)
+        # - One-hot encoding (categorical features)
+        # - Target encoding (classification) or conversion (regression)
+        X_processed, y_processed = self.preprocessor.fit_transform(dataframe)
+        
+        # Store feature names for later reference
+        self._feature_names = X_processed.columns.tolist()
+        
+        # Step 3: Validate processed data
+        self._validate_processed_data(X_processed, y_processed)
+        
+        # Step 4: Split data
+        X_train, X_test, y_train, y_test = self._split_data(
+            X_processed, 
+            y_processed
+        )
+        
+        # Step 5: Train genetic programming model
+        self._train_gp_model(X_train, y_train)
+        
+        # Step 6: Extract and return best features
+        return self._extract_best_features()
+
+    def _validate_input(self, dataframe: pd.DataFrame) -> None:
+        """
+        Validate the input dataframe.
+        
+        Args:
+            dataframe: Input DataFrame to validate
             
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=0.2, random_state=42
-            )
+        Raises:
+            ValueError: If dataframe is empty or invalid
+        """
+        if dataframe.empty:
+            raise ValueError("Input dataframe is empty")
+        
+        if len(dataframe) < 10:
+            raise ValueError(f"Dataset too small. Need at least 10 rows, got {len(dataframe)}")
+    
+    def _validate_processed_data(self, X: pd.DataFrame, y: pd.Series) -> None:
+        """
+        Validate the processed data before training.
+        
+        Args:
+            X: Processed feature DataFrame
+            y: Processed target Series
             
-            self.regressor = SymbolicRegressor(
-                population_size=1000,
-                generations=20,
+        Raises:
+            ValueError: If data is invalid for training
+        """
+        if X.empty:
+            raise ValueError("No features available after preprocessing")
+        
+        if len(X) != len(y):
+            raise ValueError(f"Feature and target lengths don't match: {len(X)} vs {len(y)}")
+        
+        # Check for NaN or inf values
+        if X.isnull().any().any():
+            raise ValueError("Processed features contain NaN values")
+        
+        if y.isnull().any():
+            raise ValueError("Processed target contains NaN values")
+    
+    def _split_data(
+        self, 
+        X: pd.DataFrame, 
+        y: pd.Series
+    ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series]:
+        """
+        Split data into training and testing sets.
+        
+        Args:
+            X: Feature DataFrame
+            y: Target Series
+            
+        Returns:
+            Tuple of (X_train, X_test, y_train, y_test)
+        """
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y,
+            test_size=0.2,
+            random_state=self.random_state,
+            stratify=y if self.problem_type == "classification" else None
+        )
+        
+        return X_train, X_test, y_train, y_test
+    
+    def _train_gp_model(
+        self, 
+        X_train: pd.DataFrame, 
+        y_train: pd.Series
+    ) -> None:
+        """
+        Initialize and train the correct GP model based on problem_type.
+        """
+
+        # --- THIS IS THE SMART SWITCH ---
+        if self.problem_type == "classification":
+            print("--- Initializing SymbolicClassifier ---") # For debugging
+            self.regressor = SymbolicClassifier(
+                population_size=self.population_size,
+                generations=self.generations,
                 stopping_criteria=0.01,
                 p_crossover=0.7,
                 p_subtree_mutation=0.1,
@@ -49,37 +236,134 @@ class GeneticProgrammingService:
                 max_samples=0.9,
                 verbose=1,
                 parsimony_coefficient=0.01,
-                random_state=42,
+                random_state=self.random_state,
                 n_jobs=-1,
-                feature_names=X.columns.tolist()
+                feature_names=self._feature_names
             )
+        else: # This is the "regression" case
+            print("--- Initializing SymbolicRegressor ---") # For debugging
+            self.regressor = SymbolicRegressor(
+                population_size=self.population_size,
+                generations=self.generations,
+                stopping_criteria=0.01,
+                p_crossover=0.7,
+                p_subtree_mutation=0.1,
+                p_hoist_mutation=0.05,
+                p_point_mutation=0.1,
+                max_samples=0.9,
+                verbose=1,
+                parsimony_coefficient=0.01,
+                random_state=self.random_state,
+                n_jobs=-1,
+                feature_names=self._feature_names
+            )
+
+        # Fit the model
+        self.regressor.fit(X_train.values, y_train.values)
+
+    def _extract_best_features(self) -> List[Dict[str, Any]]:
+        """
+        Extract the best features from the trained GP model.
+        
+        Returns:
+            List of feature dictionaries containing:
+            - feature_id: Unique identifier
+            - expression: Mathematical expression as string
+            - fitness: Fitness score (lower is better)
+            - description: Human-readable description
+        """
+        best_features = []
+        
+        # Extract top programs from the final generation
+        if hasattr(self.regressor, '_programs') and self.regressor._programs:
+            final_generation = self.regressor._programs[-1]
             
-            self.regressor.fit(X_train.values, y_train.values)
+            # Get top 10 programs (or fewer if not available)
+            top_programs = final_generation[:min(10, len(final_generation))]
             
-            best_features = []
+            for idx, program in enumerate(top_programs):
+                if program is not None:
+                    feature_info = self._create_feature_dict(
+                        feature_id=idx + 1,
+                        program=program,
+                        description="Evolved feature from final generation"
+                    )
+                    best_features.append(feature_info)
+        
+        # Fallback: use the best overall program if no programs in final generation
+        if not best_features and hasattr(self.regressor, '_program'):
+            program = self.regressor._program
+            if program is not None:
+                feature_info = self._create_feature_dict(
+                    feature_id=1,
+                    program=program,
+                    description="Best overall evolved feature"
+                )
+                best_features.append(feature_info)
+        
+        return best_features
+    
+    def _create_feature_dict(
+        self, 
+        feature_id: int, 
+        program: Any,
+        description: str
+    ) -> Dict[str, Any]:
+        """
+        Create a feature dictionary from a program.
+        
+        Args:
+            feature_id: Unique identifier for the feature
+            program: gplearn program object
+            description: Description of the feature
             
-            if hasattr(self.regressor, '_programs'):
-                for i, program in enumerate(self.regressor._programs[-1][:10]):  # Top 10
-                    if program:
-                        feature_expression = str(program)
-                        fitness = program.fitness_
-                        best_features.append({
-                            "feature_id": i + 1,
-                            "expression": feature_expression,
-                            "fitness": float(fitness) if fitness else None,
-                            "description": f"Generated feature using genetic programming"
-                        })
+        Returns:
+            Dictionary containing feature information
+        """
+        expression = str(program)
+        fitness = getattr(program, 'fitness_', None)
+        
+        return {
+            "feature_id": feature_id,
+            "expression": expression,
+            "fitness": float(fitness) if fitness is not None else None,
+            "description": description,
+            "feature_names": self._feature_names
+        }
+    
+    def get_preprocessor(self) -> Preprocessor:
+        """
+        Get the fitted preprocessor for reuse.
+        
+        Returns:
+            Fitted Preprocessor instance
+        """
+        return self.preprocessor
+    
+    def predict_features(self, dataframe: pd.DataFrame) -> pd.DataFrame:
+        """
+        Apply evolved features to new data.
+        
+        Args:
+            dataframe: New DataFrame to transform
             
-            # If no programs available, return the best overall program
-            if not best_features and hasattr(self.regressor, '_program'):
-                best_features.append({
-                    "feature_id": 1,
-                    "expression": str(self.regressor._program),
-                    "fitness": float(self.regressor._program.fitness_) if hasattr(self.regressor._program, 'fitness_') else None,
-                    "description": "Best generated feature"
-                })
+        Returns:
+            DataFrame with evolved features applied
             
-            return best_features
-            
-        except Exception as e:
-            raise ValueError(f"Error in genetic programming: {str(e)}")
+        Raises:
+            RuntimeError: If model hasn't been trained yet
+        """
+        if self.regressor is None:
+            raise RuntimeError("Model must be trained before predicting. Call run() first.")
+        
+        # Use preprocessor's transform method (not fit_transform)
+        X_processed, _ = self.preprocessor.transform(dataframe)
+        
+        # Apply evolved features
+        evolved_features = self.regressor.transform(X_processed.values)
+        
+        return pd.DataFrame(
+            evolved_features,
+            columns=[f"gp_feature_{i}" for i in range(evolved_features.shape[1])],
+            index=dataframe.index
+        )
