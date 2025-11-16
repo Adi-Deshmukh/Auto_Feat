@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func, Float
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.core.database import Base
@@ -19,6 +19,7 @@ class Dataset(Base):
     upload_time = Column(DateTime, server_default=func.now())
     profiling_report = Column(JSONB)  # Store profiling report as JSON
     project = relationship("Project", back_populates="datasets")
+    feature_generation_runs = relationship("FeatureGenerationRun", back_populates="dataset")
 
 
 class Project(Base):
@@ -31,4 +32,31 @@ class Project(Base):
     status = Column(String(50), default="active")
     created_at = Column(DateTime, server_default=func.now())
     datasets = relationship("Dataset", back_populates="project")
+
+
+class FeatureGenerationRun(Base):
+    __tablename__ = "feature_generation_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    dataset_id = Column(UUID(as_uuid=True), ForeignKey("datasets.id"), nullable=False)
+    run_time = Column(DateTime, server_default=func.now())
+    parameters = Column(JSONB)  # Store GP parameters like population_size, generations, etc.
+    
+    # Relationships
+    dataset = relationship("Dataset", back_populates="feature_generation_runs")
+    generated_features = relationship("GeneratedFeature", back_populates="run")
+
+
+class GeneratedFeature(Base):
+    __tablename__ = "generated_features"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    run_id = Column(UUID(as_uuid=True), ForeignKey("feature_generation_runs.id"), nullable=False)
+    expression = Column(String, nullable=False)  # The mathematical formula
+    fitness = Column(Float)  # The fitness score
+    feature_names = Column(JSONB)  # List of feature names used in the expression
+    
+    # Relationship
+    run = relationship("FeatureGenerationRun", back_populates="generated_features")
+
     

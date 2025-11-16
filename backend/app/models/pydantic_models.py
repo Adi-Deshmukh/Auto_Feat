@@ -34,3 +34,22 @@ class FeatureGenerationConfig(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
+class GeneratedFeatureResponse(BaseModel):
+    id: UUID
+    run_id: UUID
+    expression: str
+    fitness: Optional[float] = None
+    feature_names: Optional[List[str]] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class RunResponse(BaseModel):
+    id: UUID
+    dataset_id: UUID
+    run_time: datetime
+    parameters: dict
+    generated_features: List[GeneratedFeatureResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)

@@ -15,12 +15,15 @@ Workflow:
 Author: Aditya Deshmukh
 """
 
-from typing import Literal, List, Dict, Any, Tuple
+from typing import Literal, List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
 from gplearn.genetic import SymbolicRegressor, SymbolicClassifier, SymbolicClassifier
 from sklearn.model_selection import train_test_split
+from sqlalchemy.orm import Session
+from uuid import UUID
 
 from app.services.preprocessor import Preprocessor
+from app.models import database_models
 
 
 class GeneticProgramming:
@@ -80,7 +83,12 @@ class GeneticProgramming:
         self.regressor = None
         self._feature_names = None
     
-    def run(self, dataframe: pd.DataFrame) -> List[Dict[str, Any]]:
+    def run(
+        self, 
+        dataframe: pd.DataFrame,
+        db: Optional[Session] = None,
+        dataset_id: Optional[UUID] = None
+    ) -> Union[List[Dict[str, Any]], database_models.FeatureGenerationRun]:
         """
         Execute the complete genetic programming workflow.
         
@@ -90,21 +98,16 @@ class GeneticProgramming:
         3. Splits data into train/test sets
         4. Trains the SymbolicRegressor
         5. Extracts evolved features
+        6. Saves results to database (if db session provided)
         
         Args:
             dataframe: Input DataFrame containing features and target
+            db: Database session for saving results (optional)
+            dataset_id: ID of the dataset being processed (optional, required if db provided)
             
         Returns:
-            List of dictionaries containing evolved feature information:
-            [
-                {
-                    "feature_id": int,
-                    "expression": str,
-                    "fitness": float,
-                    "description": str
-                },
-                ...
-            ]
+            If db provided: FeatureGenerationRun object with nested generated_features
+            If db not provided: List of dictionaries containing evolved feature information
             
         Raises:
             ValueError: If target column not found or preprocessing fails
@@ -147,7 +150,13 @@ class GeneticProgramming:
         self._train_gp_model(X_train, y_train)
         
         # Step 6: Extract and return best features
-        return self._extract_best_features()
+        best_features = self._extract_best_features()
+        
+        # Step 7: Save to database if session provided
+        if db is not None and dataset_id is not None:
+            return self._save_to_warehouse(db, dataset_id, best_features)
+        
+        return best_features
 
     def _validate_input(self, dataframe: pd.DataFrame) -> None:
         """
@@ -367,3 +376,52 @@ class GeneticProgramming:
             columns=[f"gp_feature_{i}" for i in range(evolved_features.shape[1])],
             index=dataframe.index
         )
+    
+    def _save_to_warehouse(
+        self,
+        db: Session,
+        dataset_id: UUID,
+        best_features: List[Dict[str, Any]]
+    ) -> database_models.FeatureGenerationRun:
+        """
+        Save the feature generation run and features to the database warehouse.
+        
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset used for feature generation
+            best_features: List of generated features to save
+            
+        Returns:
+            The created FeatureGenerationRun object with nested generated_features
+        """
+        # Create FeatureGenerationRun record
+        run = database_models.FeatureGenerationRun(
+            dataset_id=dataset_id,
+            parameters={
+                "target_column": self.target_column,
+                "problem_type": self.problem_type,
+                "population_size": self.population_size,
+                "generations": self.generations,
+                "random_state": self.random_state,
+                "drop_columns": self.drop_columns
+            }
+        )
+        db.add(run)
+        db.flush()  # Flush to get the run.id
+        
+        # Create GeneratedFeature records for each feature
+        for feature in best_features:
+            generated_feature = database_models.GeneratedFeature(
+                run_id=run.id,
+                expression=feature["expression"],
+                fitness=feature["fitness"],
+                feature_names=feature["feature_names"]
+            )
+            db.add(generated_feature)
+        
+        # Commit all changes
+        db.commit()
+        db.refresh(run)  # Refresh to load the generated_features relationship
+        print(f"✅ Saved {len(best_features)} features to warehouse (run_id: {run.id})")
+        
+        return run
