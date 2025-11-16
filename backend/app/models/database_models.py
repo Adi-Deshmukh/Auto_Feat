@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func, Float
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func, Float, LargeBinary
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.core.database import Base
@@ -41,6 +41,7 @@ class FeatureGenerationRun(Base):
     dataset_id = Column(UUID(as_uuid=True), ForeignKey("datasets.id"), nullable=False)
     run_time = Column(DateTime, server_default=func.now())
     parameters = Column(JSONB)  # Store GP parameters like population_size, generations, etc.
+    fitted_model = Column(LargeBinary, nullable=True)  # Store pickled fitted GP model
     
     # Relationships
     dataset = relationship("Dataset", back_populates="feature_generation_runs")

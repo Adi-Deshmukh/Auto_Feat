@@ -17,6 +17,7 @@ Author: Aditya Deshmukh
 
 from typing import Literal, List, Dict, Any, Tuple, Optional, Union
 import pandas as pd
+import pickle
 from gplearn.genetic import SymbolicRegressor, SymbolicClassifier, SymbolicClassifier
 from sklearn.model_selection import train_test_split
 from sqlalchemy.orm import Session
@@ -394,6 +395,13 @@ class GeneticProgramming:
         Returns:
             The created FeatureGenerationRun object with nested generated_features
         """
+        # Pickle the fitted model for later use
+        if self.regressor is None:
+            raise ValueError("Cannot save warehouse: regressor is None. Model must be trained before saving.")
+        
+        pickled_model = pickle.dumps(self.regressor)
+        print(f"📦 Pickled model size: {len(pickled_model)} bytes")
+        
         # Create FeatureGenerationRun record
         run = database_models.FeatureGenerationRun(
             dataset_id=dataset_id,
@@ -404,10 +412,13 @@ class GeneticProgramming:
                 "generations": self.generations,
                 "random_state": self.random_state,
                 "drop_columns": self.drop_columns
-            }
+            },
+            fitted_model=pickled_model  # Save the pickled model
         )
         db.add(run)
         db.flush()  # Flush to get the run.id
+        
+        print(f"🆕 Created NEW run with ID: {run.id}")
         
         # Create GeneratedFeature records for each feature
         for feature in best_features:
