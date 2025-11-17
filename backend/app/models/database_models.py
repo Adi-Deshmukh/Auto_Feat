@@ -3,7 +3,6 @@ from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, func, Floa
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.core.database import Base
-import pandas as pd
 
 
 class Dataset(Base):

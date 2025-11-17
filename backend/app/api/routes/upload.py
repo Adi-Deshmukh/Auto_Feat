@@ -54,3 +54,16 @@ def upload_dataset(project_id: str, file: UploadFile = File(...), db: Session = 
     db.refresh(db_dataset)
 
     return db_dataset
+
+
+@router.get("/projects/{project_id}/datasets/", response_model=list[pydantic_models.DatasetResponse])
+def get_project_datasets(project_id: str, db: Session = Depends(get_db)):
+    """Get all datasets for a specific project."""
+    project = db.query(database_models.Project).filter(database_models.Project.id == project_id).first()
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    
+    datasets = db.query(database_models.Dataset).filter(
+        database_models.Dataset.project_id == project_id
+    ).all()
+    return datasets

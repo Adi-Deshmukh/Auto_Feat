@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine, Base
 from app.api.routes import projects, upload, profiling, features, evaluation
@@ -11,6 +12,19 @@ app = FastAPI(
     title="AutoFeat",
     description="An intelligent feature engineering platform using genetic programming.",
     version="0.1.0",
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001", 
+        "http://localhost:5173"
+    ],  # React dev servers
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers
 )
 
 

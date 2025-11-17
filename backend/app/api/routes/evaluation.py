@@ -95,7 +95,7 @@ def run_evaluation(
         results = evaluation_service.run_comparison(
             dataframe=dataframe,
             dataset_id=config.dataset_id,
-            run_id=config.run_id,
+            feature_generation_run_id=config.run_id,
             db=db
         )
         return results

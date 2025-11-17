@@ -61,7 +61,7 @@ class ModelEvaluationService:
         self,
         dataframe: pd.DataFrame,
         dataset_id: UUID,
-        run_id: UUID,
+        feature_generation_run_id: UUID,
         db: Session
     ) -> Dict[str, Any]:
         """
@@ -78,7 +78,7 @@ class ModelEvaluationService:
         Args:
             dataframe: Raw input DataFrame
             dataset_id: UUID of the dataset
-            run_id: UUID of the feature generation run to use
+            feature_generation_run_id: UUID of the feature generation run to use
             db: Database session for fetching generated features
             
         Returns:
@@ -91,18 +91,18 @@ class ModelEvaluationService:
             }
         """
         # Step 1: Fetch the feature generation run to get parameters
-        run = db.query(database_models.FeatureGenerationRun).filter(
-            database_models.FeatureGenerationRun.id == run_id
+        feature_gen_run = db.query(database_models.FeatureGenerationRun).filter(
+            database_models.FeatureGenerationRun.id == feature_generation_run_id
         ).first()
         
-        if not run:
-            raise ValueError(f"Feature generation run with id {run_id} not found")
+        if not feature_gen_run:
+            raise ValueError(f"Feature generation run with id {feature_generation_run_id} not found")
         
-        if len(run.generated_features) == 0:
-            raise ValueError(f"No generated features found for run {run_id}")
+        if len(feature_gen_run.generated_features) == 0:
+            raise ValueError(f"No generated features found for run {feature_generation_run_id}")
         
         # Step 2: Apply drop_columns if they were used during GP training
-        drop_columns = run.parameters.get("drop_columns")
+        drop_columns = feature_gen_run.parameters.get("drop_columns")
         if drop_columns:
             columns_to_drop = [col for col in drop_columns if col in dataframe.columns]
             dataframe = dataframe.drop(columns=columns_to_drop)
@@ -119,13 +119,13 @@ class ModelEvaluationService:
         
         # Step 5: Generate new features from the stored GP programs
         # We'll use the best programs from the run to create new features
-        print(f"📊 Generating {len(run.generated_features)} features from stored programs")
+        print(f"📊 Generating {len(feature_gen_run.generated_features)} features from stored programs")
         
         # Load the fitted model to access the programs
-        if not run.fitted_model:
-            raise ValueError(f"No fitted model found for run {run_id}")
+        if not feature_gen_run.fitted_model:
+            raise ValueError(f"No fitted model found for run {feature_generation_run_id}")
         
-        fitted_gp_model = pickle.loads(run.fitted_model)
+        fitted_gp_model = pickle.loads(feature_gen_run.fitted_model)
         
         # Get the best programs and apply them to create new features
         new_feature_columns = []
